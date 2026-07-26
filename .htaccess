@@ -1,0 +1,15 @@
+# Il gioco e' in sviluppo attivo: i sorgenti JS/HTML non devono restare in
+# cache sul dispositivo, altrimenti un deploy aggiornato non si vede finche'
+# la cache locale non scade da sola (visto succedere su mobile: joystick e
+# pulsante fullscreen assenti perche' il telefono serviva ancora la versione
+# precedente di touch.js/config.js dalla cache).
+#
+# Le immagini invece restano cacheabili normalmente: pesano di piu' e
+# cambiano raramente una volta pubblicate.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|html)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </FilesMatch>
+</IfModule>

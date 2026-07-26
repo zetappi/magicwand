@@ -1,0 +1,4 @@
+# Asset sorgente grezzi (zip, .ai, .eps, .cdr): pesanti, il gioco non li usa
+# a runtime. Le versioni processate che servono davvero stanno in
+# assets/bg/ e assets/game/, quelle restano versionate.
+assets/sprites/

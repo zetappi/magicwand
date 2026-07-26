@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game1 — Platform a scorrimento</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: system-ui, sans-serif;
+    overflow: hidden;
+  }
+  #game {
+    width: 100vw;
+    height: 100vh;
+  }
+  canvas { display: block; }
+
+  /*
+   * Avviso di rotazione: solo su device touch in portrait (il gioco e' un
+   * platform a scorrimento orizzontale, 16:9 stretto in verticale userebbe
+   * meno di un terzo dello schermo). orientation:portrait e' un media query
+   * puro, non serve JS per mostrarlo/nasconderlo al resize/rotate.
+   */
+  #rotate-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #0d1117;
+    color: #c9d1d9;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: system-ui, sans-serif;
+    padding: 24px;
+  }
+  #rotate-overlay .icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: rotate-hint 1.6s ease-in-out infinite;
+  }
+  @keyframes rotate-hint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-90deg); }
+  }
+  @media (pointer: coarse) and (orientation: portrait) {
+    #rotate-overlay { display: flex; }
+  }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="rotate-overlay">
+  <div class="icon">📱</div>
+  <p>Ruota il telefono in orizzontale<br>per giocare</p>
+</div>
+
+<!--
+  Ogni script ha ?v=<timestamp> in coda: cambiare quel numero rende l'URL
+  diverso agli occhi del browser, forzando il ricaricamento anche se una
+  cache aggressiva (tipico su mobile) ignorasse Cache-Control. Senza questo,
+  un telefono che ha gia' visitato la pagina puo' continuare a servire i
+  vecchi .js dopo un deploy corretto sul server: e' quello che e' successo
+  con il joystick e il pulsante fullscreen, assenti perche' il telefono non
+  aveva mai ri-richiesto i sorgenti aggiornati.
+
+  Il numero va rigenerato a ogni deploy che tocca file in src/: eseguire
+  script/bump-version.sh prima del rsync, non modificarlo qui a mano.
+-->
+<script src="lib/phaser.min.js"></script>
+<script src="src/config.js?v=1785088814"></script>
+<script src="src/backgrounds.js?v=1785088814"></script>
+<script src="src/assets.js?v=1785088814"></script>
+<script src="src/level.js?v=1785088814"></script>
+<script src="src/touch.js?v=1785088814"></script>
+<script src="src/scenes/BootScene.js?v=1785088814"></script>
+<script src="src/scenes/GameScene.js?v=1785088814"></script>
+<script src="src/scenes/HudScene.js?v=1785088814"></script>
+<script src="src/main.js?v=1785088814"></script>
+</body>
+</html>
