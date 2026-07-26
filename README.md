@@ -218,6 +218,34 @@ Il corpo è disegnato a scala 3× (`CFG.player.scale`) per stare in proporzione
 agli sfondi a piena risoluzione. Con un asset nativamente più grande, riduci
 quella scala e adegua `bodyWidth`/`bodyHeight`.
 
+## Effetti sonori
+
+Sei SFX in `assets/audio/`, tutti CC0 (fonti e licenze in
+[assets/audio/CREDITS.md](assets/audio/CREDITS.md)):
+
+| File | Evento | Punto in GameScene.js |
+|---|---|---|
+| `coin` | Raccolta gemma o moneta drop | `onCollectBonus`, `onTouchDrop` (ramo `isCoin`) |
+| `explosion` | Bancomat distrutto con l'incantesimo | `onBulletHitsExplosive` |
+| `shot` | Lancio dell'incantesimo | `handleFire` |
+| `hurt` | Perdita di una vita | `damagePlayer` — un solo punto, richiamato da tutte e tre le fonti di danno (bancomat, cacca, uovo) |
+| `jump` | Salto | `handleJump` |
+| `victory` | Traguardo raggiunto | `onReachGoal` (non in `endLevel`, che gestisce anche la sconfitta) |
+
+Ogni chiave sta in `Assets.SOUNDS`, separato da `Assets.KEYS`: quest'ultimo ha
+già `coin` come nome della *texture* della moneta drop (`euro.png`), un nome
+diverso nello stesso oggetto avrebbe creato un conflitto.
+
+**Punto unico di riproduzione**: `GameScene.playSfx(key, volumeKey)`, non
+`this.sound.play()` sparso nel codice — se in futuro serve un mute globale o
+un volume master, si tocca solo lì. Il volume di ciascun effetto è in
+`CFG.sfxVolume`.
+
+I file sono caricati in coppia mp3+ogg (`this.load.audio(key, [mp3, ogg])` in
+BootScene): Phaser sceglie il primo formato che il browser sa decodificare.
+Il mp3 viene prima nell'array perché copre anche Safari/iOS, dove il supporto
+per ogg è storicamente incompleto.
+
 ## Fine partita e riavvio
 
 Alla sconfitta (o al completamento di un livello) la fisica va in pausa e

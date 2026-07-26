@@ -193,5 +193,17 @@ const CFG = {
     opacity: 0.35,
   },
 
+  // Volume dei singoli effetti sonori (0-1). Coin/hurt/jump/shot sono brevi
+  // e frequenti, tenuti piu' bassi per non affaticare; explosion e victory
+  // sono eventi rari, possono stare piu' in evidenza.
+  sfxVolume: {
+    coin: 0.5,
+    explosion: 0.6,
+    shot: 0.35,
+    hurt: 0.55,
+    jump: 0.3,
+    victory: 0.7,
+  },
+
   debug: false,
 };

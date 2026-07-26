@@ -506,6 +506,7 @@ class GameScene extends Phaser.Scene {
     // JustDown evita il salto continuo tenendo premuto lo spazio/il pulsante.
     if (onGround && (keyboardJump || touchJump)) {
       this.player.body.setVelocityY(CFG.player.jumpVelocity);
+      this.playSfx(Assets.SOUNDS.jump, 'jump');
     }
   }
 
@@ -530,6 +531,8 @@ class GameScene extends Phaser.Scene {
     const tip = this.wandTip();
     const spell = this.bullets.get(tip.x, tip.y);
     if (!spell) return;
+
+    this.playSfx(Assets.SOUNDS.shot, 'shot');
 
     spell.setActive(true).setVisible(false);
     spell.body.reset(tip.x, tip.y);
@@ -837,6 +840,7 @@ class GameScene extends Phaser.Scene {
   onCollectBonus(player, bonus) {
     this.pickupFx.emitParticleAt(bonus.x, bonus.y);
     bonus.destroy();
+    this.playSfx(Assets.SOUNDS.coin, 'coin');
 
     this.score += CFG.scoring.bonus;
     this.syncHud();
@@ -860,6 +864,7 @@ class GameScene extends Phaser.Scene {
     // explosive.y, che e' il centro dello sprite a mezz'aria.
     this.spawnDrop(explosive.x, this.floorY);
     explosive.destroy();
+    this.playSfx(Assets.SOUNDS.explosion, 'explosion');
 
     this.cameras.main.shake(120, 0.006);
     this.score += CFG.scoring.explosiveDestroyed;
@@ -874,6 +879,7 @@ class GameScene extends Phaser.Scene {
     if (drop.isCoin) {
       this.pickupFx.emitParticleAt(drop.x, drop.y);
       drop.destroy();
+      this.playSfx(Assets.SOUNDS.coin, 'coin');
       this.score += CFG.drop.coinScore;
       this.syncHud();
     } else {
@@ -905,6 +911,7 @@ class GameScene extends Phaser.Scene {
   damagePlayer() {
     this.lives -= 1;
     this.invulnerableUntil = this.time.now + CFG.player.invulnerableMs;
+    this.playSfx(Assets.SOUNDS.hurt, 'hurt');
 
     this.cameras.main.shake(200, 0.012);
     this.cameras.main.flash(160, 200, 60, 60);
@@ -920,6 +927,7 @@ class GameScene extends Phaser.Scene {
     if (this.levelEnded) return;
     this.score += CFG.scoring.levelComplete;
     this.syncHud();
+    this.playSfx(Assets.SOUNDS.victory, 'victory');
     this.endLevel(true);
   }
 
@@ -972,5 +980,14 @@ class GameScene extends Phaser.Scene {
 
   syncHud() {
     if (this.hud) this.hud.updateStats(this.score, this.lives);
+  }
+
+  /**
+   * Riproduce un effetto sonoro con il volume dedicato in CFG.sfxVolume.
+   * Punto unico invece di chiamare this.sound.play() sparso nel codice: se in
+   * futuro serve un mute globale o un volume master, si tocca solo qui.
+   */
+  playSfx(key, volumeKey) {
+    this.sound.play(key, { volume: CFG.sfxVolume[volumeKey] });
   }
 }

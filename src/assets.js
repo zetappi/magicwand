@@ -30,6 +30,21 @@ const Assets = {
     eagle: 'aquila',
   },
 
+  /**
+   * Chiavi degli effetti sonori (assets/audio/), caricati da BootScene.
+   * Separate da KEYS perche' 'coin' li' e' gia' la texture della moneta
+   * drop (euro.png): stesso nome concettuale, oggetto diverso per evitare
+   * la collisione.
+   */
+  SOUNDS: {
+    coin: 'sfx-coin',
+    explosion: 'sfx-explosion',
+    shot: 'sfx-shot',
+    hurt: 'sfx-hurt',
+    jump: 'sfx-jump',
+    victory: 'sfx-victory',
+  },
+
   /** Crea tutte le texture placeholder in un colpo solo. */
   generateAll(scene) {
     this.makePlayer(scene);

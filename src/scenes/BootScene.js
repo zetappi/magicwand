@@ -30,6 +30,17 @@ class BootScene extends Phaser.Scene {
     this.load.image(Assets.KEYS.poop, 'assets/game/cacca.png');
     this.load.image(Assets.KEYS.eagle, 'assets/game/aquila.png');
 
+    // Effetti sonori: mp3 prima di ogg nell'array, Phaser sceglie il primo
+    // formato che il browser sa decodificare (mp3 copre anche Safari/iOS,
+    // dove il supporto per ogg e' storicamente incompleto).
+    const S = Assets.SOUNDS;
+    this.load.audio(S.coin, ['assets/audio/coin.mp3', 'assets/audio/coin.ogg']);
+    this.load.audio(S.explosion, ['assets/audio/explosion.mp3', 'assets/audio/explosion.ogg']);
+    this.load.audio(S.shot, ['assets/audio/shot.mp3', 'assets/audio/shot.ogg']);
+    this.load.audio(S.hurt, ['assets/audio/hurt.mp3', 'assets/audio/hurt.ogg']);
+    this.load.audio(S.jump, ['assets/audio/jump.mp3', 'assets/audio/jump.ogg']);
+    this.load.audio(S.victory, ['assets/audio/victory.mp3', 'assets/audio/victory.ogg']);
+
     // Ancora segnaposto; per sostituirli, aggiungere qui il load e togliere
     // la corrispondente make*() da Assets.generateAll().
     //
