@@ -1,0 +1,8 @@
+# Il database SQLite dei punteggi sta nella stessa cartella dell'endpoint
+# PHP: non c'e' modo pulito in questo setup di tenerlo fuori dalla document
+# root, quindi si nega l'accesso diretto via URL al file .sqlite (e ai suoi
+# eventuali file di supporto -wal/-shm/-journal usati da SQLite in certe
+# modalita').
+<FilesMatch "\.sqlite">
+  Require all denied
+</FilesMatch>

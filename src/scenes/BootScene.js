@@ -29,6 +29,7 @@ class BootScene extends Phaser.Scene {
     this.load.image(Assets.KEYS.coin, 'assets/game/euro.png');
     this.load.image(Assets.KEYS.poop, 'assets/game/cacca.png');
     this.load.image(Assets.KEYS.eagle, 'assets/game/aquila.png');
+    this.load.image(Assets.KEYS.bomb, 'assets/game/bomb.png');
 
     // Effetti sonori: mp3 prima di ogg nell'array, Phaser sceglie il primo
     // formato che il browser sa decodificare (mp3 copre anche Safari/iOS,

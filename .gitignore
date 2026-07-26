@@ -2,3 +2,8 @@
 # a runtime. Le versioni processate che servono davvero stanno in
 # assets/bg/ e assets/game/, quelle restano versionate.
 assets/sprites/
+
+# Database dei punteggi: generato al primo avvio dell'endpoint, specifico
+# dell'ambiente (locale vs produzione avranno dati diversi).
+api/score.sqlite
+api/score.sqlite-*

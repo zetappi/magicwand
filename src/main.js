@@ -27,5 +27,5 @@ window.game = new Phaser.Game({
     },
   },
 
-  scene: [BootScene, GameScene, HudScene],
+  scene: [StartScene, BootScene, GameScene, HudScene],
 });

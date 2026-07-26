@@ -58,26 +58,40 @@ class HudScene extends Phaser.Scene {
    *
    * won     esito della partita
    * hasNext se esiste un livello successivo: distingue l'avanzamento dalla
-   *         fine del gioco, cosi' il messaggio dice davvero cosa accadra'
-   *         premendo un tasto.
+   *         fine del gioco. Quando e' vero il punteggio non e' ancora
+   *         definitivo (si continua a giocare), quindi niente classifica:
+   *         quella si mostra solo su un esito realmente finale (game over,
+   *         o vittoria dell'ultimo livello).
+   * levelName nome del livello in corso, salvato insieme al punteggio.
+   * onContinue callback per proseguire (restart del livello 0, o del
+   *         successivo): centralizzata qui perche' ora ci sono piu' punti
+   *         da cui si puo' scatenare (bottone "Continua" sempre, bottone
+   *         "Invia" solo se si e' in top 10).
    */
-  showEndMessage(won, score, hasNext) {
+  showEndMessage(won, score, hasNext, levelName, onContinue) {
     const title = won
       ? (hasNext ? 'LIVELLO COMPLETATO' : 'HAI FINITO IL GIOCO')
       : 'GAME OVER';
     const color = won ? '#6ee7b7' : '#f0776a';
-    const hint = hasNext
-      ? 'Premi un tasto per il livello successivo'
-      : 'Premi un tasto per ricominciare';
+    const isFinal = !hasNext;
+
+    // Il pannello copre l'intero schermo quando mostra la classifica (serve
+    // spazio per titolo + punteggio + lista + form), una fascia centrale
+    // negli altri casi. Coprire tutto lo schermo evita anche il difetto
+    // visto in test: con un pannello piu' piccolo la scena di gioco restava
+    // visibile sopra/sotto, sovrapposta al testo.
+    const panelHeight = isFinal ? CFG.height : 320;
 
     this.add
-      .rectangle(CFG.width / 2, CFG.height / 2, CFG.width, 320, 0x000000, 0.78)
+      .rectangle(CFG.width / 2, CFG.height / 2, CFG.width, panelHeight, 0x000000, 0.88)
       .setDepth(50);
 
+    const top = CFG.height / 2 - panelHeight / 2;
+
     this.add
-      .text(CFG.width / 2, CFG.height / 2 - 60, title, {
+      .text(CFG.width / 2, top + 60, title, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '84px',
+        fontSize: isFinal ? 60 : 72,
         color,
         stroke: '#000000',
         strokeThickness: 10,
@@ -86,21 +100,241 @@ class HudScene extends Phaser.Scene {
       .setDepth(51);
 
     this.add
-      .text(CFG.width / 2, CFG.height / 2 + 40, `Punteggio: ${score}`, {
+      .text(CFG.width / 2, top + (isFinal ? 130 : 150), `Punteggio: ${score}`, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '44px',
+        fontSize: isFinal ? 34 : 40,
         color: '#ffffff',
       })
       .setOrigin(0.5)
       .setDepth(51);
 
-    this.add
-      .text(CFG.width / 2, CFG.height / 2 + 110, hint, {
+    if (!isFinal) {
+      // Livello intermedio: comportamento invariato, nessuna classifica.
+      this.add
+        .text(CFG.width / 2, top + 230, 'Premi un tasto per il livello successivo', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '28px',
+          color: '#c9d1d9',
+        })
+        .setOrigin(0.5)
+        .setDepth(51);
+      return;
+    }
+
+    this.showFinalScreen(score, levelName, top, onContinue);
+  }
+
+  /**
+   * Corpo della schermata finale: recupera la classifica in modo asincrono
+   * (fetch di rete) e poi decide se mostrare il campo nick o solo la lista.
+   *
+   * Layout in fasce fisse (in pixel dal top del pannello, che qui e' 0 in
+   * alto sullo schermo intero): titolo/punteggio nei primi 130px, lista
+   * classifica subito sotto, form/pulsante negli ultimi ~150px. Le due fasce
+   * non si toccano mai per costruzione, a differenza della prima versione
+   * che posizionava il form HTML con una percentuale di viewport scollegata
+   * dalle coordinate di gioco usate dal testo Phaser.
+   */
+  async showFinalScreen(score, levelName, top, onContinue) {
+    const listY = top + 190;
+
+    const loadingText = this.add
+      .text(CFG.width / 2, listY, 'Caricamento classifica…', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '30px',
-        color: '#c9d1d9',
+        fontSize: '26px',
+        color: '#8b949e',
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(51);
+
+    const scores = await ScoreApi.getTopScores();
+    loadingText.destroy();
+
+    // In top 10 se la classifica ha meno di 10 voci, o se il punteggio batte
+    // l'ultimo della lista. Un pareggio esatto con l'ultimo posto conta come
+    // "dentro" (>=): con pochi punteggi in classifica e' il caso piu' comune
+    // da incontrare, meglio includerlo che escluderlo.
+    const madeTop10 = scores.length < 10 || score >= scores[scores.length - 1].score;
+
+    this.renderScoreList(scores, listY);
+
+    if (madeTop10) {
+      this.showNickForm(score, levelName, onContinue);
+    } else {
+      this.showContinueButton(onContinue);
+    }
+  }
+
+  /** Elenco dei migliori punteggi, in colonna. */
+  renderScoreList(scores, y) {
+    if (scores.length === 0) {
+      this.add
+        .text(CFG.width / 2, y, 'Nessun punteggio registrato ancora', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '22px',
+          color: '#8b949e',
+        })
+        .setOrigin(0.5)
+        .setDepth(51);
+      return;
+    }
+
+    const lines = scores
+      .map((s, i) => `${i + 1}. ${s.nick}  —  ${s.score}`)
+      .join('\n');
+
+    this.add
+      .text(CFG.width / 2, y, lines, {
+        fontFamily: 'system-ui, monospace',
+        fontSize: '24px',
+        color: '#e6edf3',
+        align: 'center',
+        lineSpacing: 6,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(51);
+  }
+
+  /**
+   * Converte una coordinata Y in pixel di gioco (0..CFG.height) nella
+   * percentuale di viewport che le corrisponde. Necessario per l'overlay
+   * HTML (che vive fuori dal canvas Phaser e non conosce le sue coordinate
+   * interne): usare una percentuale arbitraria della finestra invece che
+   * derivata da CFG.height, come nella prima versione, disallineava
+   * l'input dal testo Phaser ogni volta che Scale.FIT scalava il canvas in
+   * modo diverso dalla finestra — causa esatta della sovrapposizione vista
+   * nello screenshot di verifica.
+   */
+  gameYToPercent(y) {
+    return `${(y / CFG.height) * 100}%`;
+  }
+
+  /**
+   * Campo nick + pulsante invio, per chi rientra in top 10. Overlay HTML
+   * (non oggetti Phaser) perche' serve un vero input di testo con cursore,
+   * tastiera virtuale su mobile, incolla: tutte cose che un Phaser.Text non
+   * offre. Rimosso esplicitamente all'uscita dalla schermata (remove()),
+   * altrimenti resterebbe nel DOM oltre il ciclo di vita della scena.
+   *
+   * formY e' in coordinate di gioco, converitta con gameYToPercent(): cosi'
+   * il form resta nella stessa fascia orizzontale del bottone "Continua"
+   * sottostante (anch'esso in coordinate di gioco), qualunque sia lo
+   * scaling reale del canvas.
+   */
+  showNickForm(score, levelName, onContinue) {
+    const formY = CFG.height - 220;
+
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, {
+      position: 'fixed',
+      left: '50%',
+      top: this.gameYToPercent(formY),
+      transform: 'translate(-50%, -50%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '10px',
+      zIndex: '20',
+      fontFamily: 'system-ui, sans-serif',
+    });
+
+    const row = document.createElement('div');
+    Object.assign(row.style, { display: 'flex', gap: '10px' });
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 20;
+    input.placeholder = 'Il tuo nome';
+    input.value = ScoreApi.getSavedNick();
+    Object.assign(input.style, {
+      fontSize: '20px',
+      padding: '8px 12px',
+      borderRadius: '6px',
+      border: '2px solid #6ee7b7',
+      width: '240px',
+    });
+
+    const button = document.createElement('button');
+    button.textContent = 'Invia punteggio';
+    Object.assign(button.style, {
+      fontSize: '20px',
+      padding: '8px 18px',
+      borderRadius: '6px',
+      border: 'none',
+      background: '#6ee7b7',
+      color: '#0d1117',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    });
+
+    const status = document.createElement('div');
+    Object.assign(status.style, {
+      fontSize: '18px',
+      color: '#c9d1d9',
+      minHeight: '22px',
+    });
+
+    const submit = async () => {
+      const nick = input.value.trim();
+      if (nick === '') {
+        status.textContent = 'Inserisci un nome prima di inviare';
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = 'Invio in corso…';
+
+      ScoreApi.saveNick(nick);
+      const ok = await ScoreApi.submitScore(nick, score, levelName);
+
+      status.textContent = ok ? 'Punteggio salvato!' : 'Invio non riuscito, riprova';
+      button.disabled = false;
+    };
+
+    button.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      // Ferma la propagazione: altrimenti i tasti finiscono anche al
+      // listener 'keydown' di GameScene.endLevel(), che farebbe ripartire
+      // il livello mentre si sta ancora scrivendo il nome.
+      e.stopPropagation();
+      if (e.key === 'Enter') submit();
+    });
+
+    row.appendChild(input);
+    row.appendChild(button);
+    wrap.appendChild(row);
+    wrap.appendChild(status);
+    document.body.appendChild(wrap);
+
+    this.events.once('shutdown', () => wrap.remove());
+
+    // Il bottone "Continua" resta sotto il form, con margine di sicurezza:
+    // non serve inviare per proseguire, l'invio e la prosecuzione sono
+    // azioni indipendenti.
+    this.showContinueButton(onContinue, wrap);
+  }
+
+  /**
+   * Pulsante "Continua": sostituisce il vecchio "premi un tasto qualsiasi",
+   * necessario ora perche' un tasto premuto mentre si scrive il nick non
+   * deve far ripartire la partita (vedi stopPropagation in showNickForm).
+   */
+  showContinueButton(onContinue, formToCleanup) {
+    const hint = this.add
+      .text(CFG.width / 2, CFG.height - 90, 'Continua', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '32px',
+        color: '#0d1117',
+        backgroundColor: '#c9d1d9',
+        padding: { x: 24, y: 10 },
       })
       .setOrigin(0.5)
-      .setDepth(51);
+      .setDepth(51)
+      .setInteractive({ useHandCursor: true });
+
+    hint.on('pointerup', () => {
+      if (formToCleanup) formToCleanup.remove();
+      onContinue();
+    });
   }
 }

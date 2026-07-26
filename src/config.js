@@ -65,18 +65,26 @@ const CFG = {
     // e continuare a spingerlo mentre lo tocca.
     chaseStopDistance: 60,
 
-    // Probabilita' che, distrutto, lasci una moneta bonus invece di una
-    // cacca malus. Il drop resta a terra finche' il player non lo raccoglie
-    // o lo tocca: nessun timer di scomparsa.
+    // Probabilita' che, distrutto, lasci una moneta bonus invece di un
+    // malus (cacca o bomba). Il drop resta a terra finche' il player non lo
+    // raccoglie o lo tocca: nessun timer di scomparsa.
     dropChance: 0.5,
+    // Della quota "malus" (1 - dropChance), la frazione che e' bomba invece
+    // di cacca. Tenuta bassa apposta: la bomba spazza via ogni bancomat del
+    // livello in un colpo solo, un drop cosi' potente deve restare raro.
+    bombChance: 0.1,
     dropHeight: 70,
   },
 
-  // Drop lasciato da un bancomat distrutto: moneta (bonus) o cacca (malus).
+  // Drop lasciato da un bancomat distrutto: moneta (bonus), cacca (malus) o
+  // bomba (super bonus raro, vedi CFG.explosive.bombChance).
   drop: {
     coinScore: 150,
-    // Ampiezza e durata dell'oscillazione verticale della moneta, identica
-    // nello spirito a quella delle gemme bonus.
+    // Punti per aver raccolto la bomba, oltre ai punti dei bancomat che fa
+    // esplodere (CFG.scoring.explosiveDestroyed ciascuno).
+    bombScore: 100,
+    // Ampiezza e durata dell'oscillazione verticale di moneta e bomba,
+    // identica nello spirito a quella delle gemme bonus.
     coinBobAmount: 18,
     coinBobMs: 850,
   },

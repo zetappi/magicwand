@@ -57,14 +57,20 @@ src/
   assets.js         texture generate a runtime (corpo, gemme, particelle)
   level.js          i tre livelli come dati puri
   touch.js          controlli touch (joystick + pulsanti), overlay HTML
+  scoreApi.js       client per l'endpoint dei punteggi (fetch verso api/)
   main.js           bootstrap di Phaser
   scenes/
+    StartScene.js   schermata iniziale (copertina + invito a iniziare)
     BootScene.js    caricamento sfondi e definizione animazioni
     GameScene.js    mondo, giocatore, collisioni, punteggio
-    HudScene.js     interfaccia sovrapposta
+    HudScene.js     interfaccia sovrapposta, incluso game over + classifica
+api/
+  score.php         endpoint REST (GET classifica, POST nuovo punteggio)
+  score.sqlite       database, generato al primo avvio — non versionato
+  .htaccess         nega l'accesso diretto al file .sqlite via URL
 assets/
   bg/{forest,city,night}/layer_NN.png    sfondi pronti all'uso
-  game/{head,wand,atm}.png               personaggio e ostacoli, ritagliati
+  game/{head,wand,atm,bomb,startingpage}.png/.jpg   asset di gioco, ritagliati
   sprites/                               asset originali come scaricati
 ```
 
@@ -182,12 +188,23 @@ spingere il player una volta a contatto. Il gruppo non è più `immovable`
 contatto col player resta gestito da `onHitExplosive()` via `overlap`, non da
 un collider fisico: i due non si spingono a vicenda.
 
-### Il drop: moneta o cacca
+### Il drop: moneta, bomba o cacca
 
 Quando un incantesimo distrugge un bancomat, `onBulletHitsExplosive()` chiama
-`spawnDrop()`, che genera al 50/50 (`CFG.explosive.dropChance`) una moneta
-(`euro.png`, bonus) o una cacca (`cacca.png`, malus) — un solo gruppo fisico
-per entrambe, distinte dal flag `drop.isCoin` letto in `onTouchDrop()`.
+`spawnDrop()`, che genera un solo gruppo fisico per tre esiti possibili,
+distinti dalla stringa `drop.dropType` letta in `onTouchDrop()`:
+
+- **moneta** (`euro.png`) — `CFG.explosive.dropChance` di probabilità (50%).
+  Bonus: `CFG.drop.coinScore` punti aggiuntivi ai 250 della distruzione.
+- **bomba** (`bomb.png`) — della quota restante,
+  `CFG.explosive.bombChance` di probabilità (10%: 5% sul totale). Raccoglierla
+  chiama `triggerBomb()`, che distrugge **tutti** i bancomat ancora vivi nel
+  livello con lo stesso punteggio ed effetti di un colpo singolo, più
+  `CFG.drop.bombScore` di bonus. Deliberatamente rara: è il drop più potente
+  del gioco, spazza via l'intero livello in un colpo.
+- **cacca** (`cacca.png`) — il resto della quota malus (45%). Al contatto
+  funziona come un bancomat intatto: una vita persa, rispettando la finestra
+  di invulnerabilità.
 
 Il drop appare **nel punto x dell'esplosione ma alla quota del pavimento**
 (`this.floorY`, non `explosive.y`): il bancomat può essersi spostato inseguendo
@@ -195,10 +212,12 @@ il player e trovarsi a mezz'aria rispetto allo sprite, ma il drop deve comunque
 appoggiarsi a terra. Resta lì finché il player non lo raccoglie/tocca — nessun
 timer di scomparsa, coerente con gemme e bancomat che già non scadono.
 
-La moneta ondeggia come le gemme bonus (`coinBobAmount`, `coinBobMs`) e vale
-`CFG.drop.coinScore` punti aggiuntivi rispetto ai 250 della distruzione. La
-cacca resta ferma a terra e, al contatto, funziona come un bancomat intatto:
-una vita persa, rispettando la finestra di invulnerabilità.
+Moneta e bomba ondeggiano come le gemme bonus (`coinBobAmount`, `coinBobMs`),
+per leggersi entrambe come "premio da raccogliere"; la cacca resta ferma a
+terra, coerente con l'essere un pericolo.
+
+`triggerBomb()` **non richiama `spawnDrop()`** sui bancomat che distrugge: la
+bomba spazza via gli ostacoli, non ne genera altri a cascata.
 
 ## Sprite ancora segnaposto
 
@@ -248,13 +267,20 @@ per ogg è storicamente incompleto.
 
 ## Fine partita e riavvio
 
-Alla sconfitta (o al completamento di un livello) la fisica va in pausa e
-compare la schermata di fine partita. Un tasto o un tocco qualsiasi prosegue:
-al livello successivo se hai vinto, da capo altrimenti.
+Alla sconfitta o al completamento di un livello la fisica va in pausa e
+compare la schermata di fine partita. Il comportamento dipende da `hasNext`
+(esiste un livello successivo):
 
-Per i primi `CFG.restartDelayMs` (700ms) l'input è ignorato, così la
-schermata non viene saltata dal tasto/tocco ancora attivo al momento della
-morte.
+- **Livello intermedio** (`hasNext=true`): comportamento originale, invariato.
+  Un tasto o un tocco qualsiasi prosegue al livello successivo. Per i primi
+  `CFG.restartDelayMs` (700ms) l'input è ignorato, così la schermata non viene
+  saltata dal tasto/tocco ancora attivo al momento della morte.
+- **Esito finale** (`hasNext=false`: game over, o vittoria dell'ultimo
+  livello — l'unico caso in cui il punteggio è davvero definitivo): mostra la
+  classifica (vedi sotto), niente più "premi un tasto qualsiasi". Il
+  proseguimento passa da un pulsante "Continua" esplicito dentro `HudScene`,
+  perché un tasto premuto mentre si scrive il nick non deve far ripartire la
+  partita.
 
 Tre dettagli che hanno causato altrettanti bug, tutti risolti:
 
@@ -273,6 +299,82 @@ Tre dettagli che hanno causato altrettanti bug, tutti risolti:
   appena causato la sconfitta (es. il rilascio del joystick) faccia scattare
   subito il restart. Un flag `restarted` impedisce che i due listener (tastiera
   e touch) richiamino `scene.restart()` due volte se scattano quasi assieme.
+
+## Schermata iniziale
+
+[src/scenes/StartScene.js](src/scenes/StartScene.js): mostra `startingpage.jpg`
+(1920×1080, stessa risoluzione del gioco — nessuno scaling necessario) e
+attende un tasto o un tocco, con la stessa logica anti tocco-accidentale del
+game over (finestra di cortesia `CFG.restartDelayMs`, `Date.now()` non
+`delayedCall`). È la prima scena della sequenza (`main.js`): precede
+`BootScene`.
+
+## Classifica e punteggi (high-score)
+
+**Nessuna protezione anti-cheat.** L'endpoint (`api/score.php`) accetta
+qualunque punteggio via richiesta HTTP diretta, senza validare che provenga
+da una vera sessione di gioco — scelta deliberata per un gioco amatoriale, non
+una svista. Se in futuro servisse irrobustirlo, il punto da toccare è solo
+quello: il client non sa nulla di come i punteggi vengono verificati.
+
+**Backend**: PHP + SQLite (`api/score.sqlite`, un singolo file, creato al
+primo avvio — non versionato, escluso via `.gitignore`). Un solo endpoint,
+due metodi:
+
+- `GET api/score.php` → `{"scores": [...]}`, i migliori 10 per punteggio
+  decrescente.
+- `POST api/score.php` con `{"nick", "score", "level"}` → salva una riga.
+
+Il file `.sqlite` è protetto da accesso diretto via URL da
+[api/.htaccess](api/.htaccess) (`Require all denied` su `*.sqlite`): non c'è
+modo pulito in questo setup di tenerlo fuori dalla document root, quindi si
+nega l'accesso invece di spostarlo.
+
+**Un bug non ovvio incontrato in sviluppo**: la colonna `created_at` con
+default `datetime("now")` fallisce in SQLite (`default value of column
+[created_at] is not constant`) — SQLite accetta come default solo espressioni
+letteralmente costanti, non funzioni arbitrarie. La sintassi corretta è
+`DEFAULT CURRENT_TIMESTAMP`, il keyword nativo di SQLite per questo scopo.
+
+**Client**: [src/scoreApi.js](src/scoreApi.js), un modulo che non lancia mai
+(restituisce array/booleano anche in caso di errore di rete): l'HUD non deve
+avvolgere ogni chiamata in un try/catch, un ranking vuoto è un esito
+legittimo quanto un errore di connessione silenzioso.
+
+**Flusso in `HudScene.showEndMessage()`**, solo sull'esito finale:
+
+1. Il pannello di sfondo copre l'intero schermo (non solo una fascia
+   centrale come nei livelli intermedi): serve spazio per titolo, punteggio,
+   classifica e form, ed evita che la scena di gioco resti visibile sopra o
+   sotto il testo — il difetto visto durante la verifica, quando il pannello
+   copriva solo una fascia centrale.
+2. La classifica viene recuperata in modo asincrono; un'etichetta
+   "Caricamento classifica…" occupa lo spazio nel frattempo, così non c'è
+   uno scatto quando i dati arrivano.
+3. Si è in top 10 se la classifica ha meno di 10 voci, o se il punteggio
+   batte l'ultimo posto (`>=`, un pareggio conta come "dentro").
+4. **In top 10**: campo nick (nome ricordato in `localStorage`, chiave
+   `magicwand-nick`) + pulsante "Invia punteggio", overlay HTML sotto la
+   scena Phaser. Il pulsante "Continua" resta comunque disponibile,
+   indipendente dall'invio.
+5. **Fuori classifica**: solo la lista e il pulsante "Continua".
+
+**Il form nick è HTML, non oggetti Phaser**: serve un vero input di testo con
+cursore, tastiera virtuale su mobile, incolla — cose che `Phaser.Text` non
+offre. Due dettagli che ne derivano:
+
+- **Le coordinate vanno convertite esplicitamente.** L'overlay HTML vive fuori
+  dal canvas e non conosce le coordinate di gioco (1920×1080): posizionarlo
+  con una percentuale arbitraria della finestra del browser lo disallinea dal
+  testo Phaser ogni volta che `Scale.FIT` scala il canvas in modo diverso
+  dalla finestra reale — è il bug che ha causato la sovrapposizione vista
+  durante la verifica. `gameYToPercent()` converte una coordinata Y in pixel
+  di gioco nella percentuale di viewport corrispondente, così l'HTML resta
+  sempre nella stessa fascia del testo Phaser.
+- **`stopPropagation()` sui tasti dell'input.** Senza, i tasti premuti mentre
+  si scrive il nick arriverebbero anche al listener `keydown` di
+  `GameScene.endLevel()` — che sui livelli intermedi farebbe ripartire la
+  partita mentre si sta ancora scrivendo il nome.
 
 ## Controlli touch
 

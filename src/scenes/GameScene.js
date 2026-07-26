@@ -299,25 +299,40 @@ class GameScene extends Phaser.Scene {
   /**
    * Genera un drop nel punto in cui un bancomat e' stato distrutto.
    *
-   * 50/50 fra moneta e cacca (CFG.explosive.dropChance). La moneta ondeggia
-   * come le gemme bonus; la cacca resta ferma a terra, coerente con l'essere
-   * un ostacolo/pericolo piuttosto che un premio.
+   * Tre esiti possibili:
+   *   coin  - bonus, punti extra (CFG.explosive.dropChance di probabilita')
+   *   bomb  - super bonus raro: fa esplodere tutti i bancomat rimasti
+   *           (una frazione CFG.explosive.bombChance della quota restante)
+   *   poop  - malus, costa una vita al contatto (il resto della quota)
+   *
+   * Moneta e bomba ondeggiano come le gemme bonus, per leggersi entrambe
+   * come "premio da raccogliere"; la cacca resta ferma a terra, coerente
+   * con l'essere un pericolo.
    */
   spawnDrop(x, groundY) {
-    const isCoin = Math.random() < CFG.explosive.dropChance;
-    const key = isCoin ? Assets.KEYS.coin : Assets.KEYS.poop;
+    const roll = Math.random();
+    let type;
+    if (roll < CFG.explosive.dropChance) {
+      type = 'coin';
+    } else if (Math.random() < CFG.explosive.bombChance) {
+      type = 'bomb';
+    } else {
+      type = 'poop';
+    }
+
+    const key = { coin: Assets.KEYS.coin, bomb: Assets.KEYS.bomb, poop: Assets.KEYS.poop }[type];
 
     const drop = this.drops.create(x, 0, key);
     const scale = CFG.explosive.dropHeight / drop.height;
     drop.setScale(scale);
     drop.setDepth(9);
-    drop.isCoin = isCoin;
+    drop.dropType = type;
 
     // Appoggiato a terra, come i bancomat: dropHeight e' l'altezza a schermo.
     drop.setY(groundY - (drop.height * scale) / 2);
     drop.body.setSize(drop.width * 0.8, drop.height * 0.85, true);
 
-    if (isCoin) {
+    if (type === 'coin' || type === 'bomb') {
       this.tweens.add({
         targets: drop,
         y: drop.y - CFG.drop.coinBobAmount,
@@ -872,15 +887,47 @@ class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Contatto con un drop lasciato da un bancomat: moneta o cacca.
-   * isCoin, impostato in spawnDrop(), distingue premio da penalita'.
+   * Bomba raccolta: distrugge tutti i bancomat ancora vivi nel livello in un
+   * colpo solo, con gli stessi punti ed effetti che darebbe colpirli uno per
+   * uno con l'incantesimo. Non genera nuovi drop (spawnDrop non viene
+   * richiamato): la bomba spazza via gli ostacoli, non ne moltiplica altri.
+   *
+   * getChildren() viene copiato in un array prima del ciclo perche' destroy()
+   * modifica il gruppo mentre lo si sta scorrendo: iterare direttamente su
+   * getChildren() salterebbe elementi, dato che l'array si accorcia sotto i piedi.
+   */
+  triggerBomb() {
+    const targets = [...this.explosives.getChildren()];
+
+    for (const ex of targets) {
+      this.spellHitFx.emitParticleAt(ex.x, ex.y, 26);
+      this.explosionFx.emitParticleAt(ex.x, ex.y);
+      ex.destroy();
+      this.score += CFG.scoring.explosiveDestroyed;
+    }
+
+    if (targets.length > 0) {
+      this.playSfx(Assets.SOUNDS.explosion, 'explosion');
+      this.cameras.main.shake(280, 0.014);
+    }
+  }
+
+  /**
+   * Contatto con un drop lasciato da un bancomat: moneta, bomba o cacca.
+   * dropType, impostato in spawnDrop(), distingue i tre esiti.
    */
   onTouchDrop(player, drop) {
-    if (drop.isCoin) {
+    if (drop.dropType === 'coin') {
       this.pickupFx.emitParticleAt(drop.x, drop.y);
       drop.destroy();
       this.playSfx(Assets.SOUNDS.coin, 'coin');
       this.score += CFG.drop.coinScore;
+      this.syncHud();
+    } else if (drop.dropType === 'bomb') {
+      this.pickupFx.emitParticleAt(drop.x, drop.y);
+      drop.destroy();
+      this.score += CFG.drop.bombScore;
+      this.triggerBomb();
       this.syncHud();
     } else {
       if (this.time.now < this.invulnerableUntil) return;
@@ -940,7 +987,6 @@ class GameScene extends Phaser.Scene {
     this.physics.pause();
 
     const hasNext = won && this.levelIndex + 1 < LEVELS.length;
-    this.hud.showEndMessage(won, this.score, hasNext);
 
     // Vinto: si prosegue col livello successivo mantenendo il punteggio.
     // Perso, o finiti i livelli: si ricomincia da capo.
@@ -948,14 +994,28 @@ class GameScene extends Phaser.Scene {
       ? { levelIndex: this.levelIndex + 1, score: this.score }
       : { levelIndex: 0, score: 0 };
 
+    const proceed = () => {
+      this.scene.stop('Hud');
+      this.scene.restart(next);
+    };
+
+    this.hud.showEndMessage(won, this.score, hasNext, this.level.name, proceed);
+
+    // Solo sui livelli intermedi resta il "premi un tasto qualsiasi": nella
+    // schermata finale (hasNext=false) il proseguimento passa dal pulsante
+    // "Continua" dentro HudScene, perche' li' puo' esserci anche un campo di
+    // testo per il nick — un tasto premuto mentre si scrive non deve far
+    // ripartire la partita (vedi stopPropagation in HudScene.showNickForm).
+    if (!hasNext) return;
+
     // I listener si registrano subito, ma ignorano l'input finche' non e'
-    // passata la finestra di cortesia: cosi' la schermata di fine partita non
-    // viene saltata dal tasto/tocco ancora attivo al momento della morte.
+    // passata la finestra di cortesia: cosi' la schermata non viene saltata
+    // dal tasto/tocco ancora attivo al momento della morte.
     //
     // La finestra si misura con Date.now() e non con this.time.delayedCall():
     // i timer di Phaser avanzano solo dentro update(), quindi se il gioco
     // perde frame l'attesa si dilata e il listener non verrebbe mai armato,
-    // lasciando la partita bloccata sul game over.
+    // lasciando la partita bloccata sulla schermata.
     const acceptFrom = Date.now() + CFG.restartDelayMs;
     let restarted = false;
 
@@ -965,8 +1025,7 @@ class GameScene extends Phaser.Scene {
 
       this.input.keyboard.off('keydown', restart);
       window.removeEventListener('touchend', restart);
-      this.scene.stop('Hud');
-      this.scene.restart(next);
+      proceed();
     };
 
     // Su desktop c'e' la tastiera; su mobile non esiste alcun keydown, quindi

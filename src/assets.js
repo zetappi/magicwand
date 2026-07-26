@@ -28,6 +28,7 @@ const Assets = {
     coin: 'euro',
     poop: 'cacca',
     eagle: 'aquila',
+    bomb: 'bomb',
   },
 
   /**
