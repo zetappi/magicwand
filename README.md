@@ -70,7 +70,7 @@ api/
   .htaccess         nega l'accesso diretto al file .sqlite via URL
 assets/
   bg/{forest,city,night}/layer_NN.png    sfondi pronti all'uso
-  game/{head,wand,atm,bomb,startingpage}.png/.jpg   asset di gioco, ritagliati
+  game/{head,wand,atm,bomb,startingpage,lastpage}.png/.jpg   asset di gioco, ritagliati
   sprites/                               asset originali come scaricati
 ```
 
@@ -341,23 +341,38 @@ letteralmente costanti, non funzioni arbitrarie. La sintassi corretta è
 avvolgere ogni chiamata in un try/catch, un ranking vuoto è un esito
 legittimo quanto un errore di connessione silenzioso.
 
-**Flusso in `HudScene.showEndMessage()`**, solo sull'esito finale:
+**Flusso in `HudScene.showEndMessage()`**, solo sull'esito finale (due fasi,
+scene distinte):
 
-1. Il pannello di sfondo copre l'intero schermo (non solo una fascia
-   centrale come nei livelli intermedi): serve spazio per titolo, punteggio,
-   classifica e form, ed evita che la scena di gioco resti visibile sopra o
-   sotto il testo — il difetto visto durante la verifica, quando il pannello
-   copriva solo una fascia centrale.
-2. La classifica viene recuperata in modo asincrono; un'etichetta
+1. **Fase 1 — `showTitleOnly()`**: per `CFG.finalTitleMs` (3,5s) resta a
+   schermo solo la scritta grande ("GAME OVER" / "HAI FINITO IL GIOCO") su
+   sfondo scuro pieno schermo, nessun input possibile. Passato il tempo,
+   `this.children.removeAll(true)` ripulisce tutto e si passa alla fase 2.
+2. **Fase 2 — `showFinalScreen()`**: `lastpage.jpg` a piena schermo, con
+   punteggio e classifica su una fascia scura semitrasparente in alto (il
+   motivo decorativo dell'immagine da solo rischia di far perdere il testo
+   bianco). La classifica viene recuperata in modo asincrono; un'etichetta
    "Caricamento classifica…" occupa lo spazio nel frattempo, così non c'è
    uno scatto quando i dati arrivano.
 3. Si è in top 10 se la classifica ha meno di 10 voci, o se il punteggio
    batte l'ultimo posto (`>=`, un pareggio conta come "dentro").
 4. **In top 10**: campo nick (nome ricordato in `localStorage`, chiave
-   `magicwand-nick`) + pulsante "Invia punteggio", overlay HTML sotto la
-   scena Phaser. Il pulsante "Continua" resta comunque disponibile,
+   `magicwand-nick`) + pulsante "Invia punteggio", overlay HTML sopra
+   `lastpage.jpg`. Il pulsante "Continua" resta comunque disponibile,
    indipendente dall'invio.
 5. **Fuori classifica**: solo la lista e il pulsante "Continua".
+
+Sui livelli intermedi (`hasNext=true`) nessuna di queste due fasi: resta il
+pannello a fascia centrale originale, "premi un tasto per il livello
+successivo".
+
+**Bug non ovvio incontrato qui**: la fase 1 usava `this.time.delayedCall()`
+per il timeout di 3,5s — la schermata restava bloccata sulla scritta ben oltre
+il tempo previsto. Stesso identico problema già risolto altrove in
+`GameScene.endLevel()` (vedi sopra): i timer di Phaser avanzano solo dentro
+`update()`, e con la fisica in pausa il ciclo rallenta al punto da rendere il
+delay inaffidabile. Corretto con `setTimeout()` nativo del browser, non
+legato al loop di Phaser.
 
 **Il form nick è HTML, non oggetti Phaser**: serve un vero input di testo con
 cursore, tastiera virtuale su mobile, incolla — cose che `Phaser.Text` non

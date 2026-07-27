@@ -75,23 +75,27 @@ class HudScene extends Phaser.Scene {
     const color = won ? '#6ee7b7' : '#f0776a';
     const isFinal = !hasNext;
 
-    // Il pannello copre l'intero schermo quando mostra la classifica (serve
-    // spazio per titolo + punteggio + lista + form), una fascia centrale
-    // negli altri casi. Coprire tutto lo schermo evita anche il difetto
-    // visto in test: con un pannello piu' piccolo la scena di gioco restava
-    // visibile sopra/sotto, sovrapposta al testo.
-    const panelHeight = isFinal ? CFG.height : 320;
+    if (isFinal) {
+      // Esito finale: prima la sola scritta per qualche secondo (nessuna
+      // classifica, nessun pannello a piena altezza), poi si passa alla
+      // schermata con lastpage.jpg. Le due fasi sono scene separate: la
+      // prima si autodistrugge, la seconda parte da zero pulita.
+      this.showTitleOnly(title, color, score, levelName, onContinue);
+      return;
+    }
+
+    // Livello intermedio: comportamento invariato, fascia centrale.
+    const panelHeight = 320;
+    const top = CFG.height / 2 - panelHeight / 2;
 
     this.add
       .rectangle(CFG.width / 2, CFG.height / 2, CFG.width, panelHeight, 0x000000, 0.88)
       .setDepth(50);
 
-    const top = CFG.height / 2 - panelHeight / 2;
-
     this.add
       .text(CFG.width / 2, top + 60, title, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: isFinal ? 60 : 72,
+        fontSize: 72,
         color,
         stroke: '#000000',
         strokeThickness: 10,
@@ -100,52 +104,98 @@ class HudScene extends Phaser.Scene {
       .setDepth(51);
 
     this.add
-      .text(CFG.width / 2, top + (isFinal ? 130 : 150), `Punteggio: ${score}`, {
+      .text(CFG.width / 2, top + 150, `Punteggio: ${score}`, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: isFinal ? 34 : 40,
+        fontSize: 40,
         color: '#ffffff',
       })
       .setOrigin(0.5)
       .setDepth(51);
 
-    if (!isFinal) {
-      // Livello intermedio: comportamento invariato, nessuna classifica.
-      this.add
-        .text(CFG.width / 2, top + 230, 'Premi un tasto per il livello successivo', {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '28px',
-          color: '#c9d1d9',
-        })
-        .setOrigin(0.5)
-        .setDepth(51);
-      return;
-    }
-
-    this.showFinalScreen(score, levelName, top, onContinue);
+    this.add
+      .text(CFG.width / 2, top + 230, 'Premi un tasto per il livello successivo', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '28px',
+        color: '#c9d1d9',
+      })
+      .setOrigin(0.5)
+      .setDepth(51);
   }
 
   /**
-   * Corpo della schermata finale: recupera la classifica in modo asincrono
-   * (fetch di rete) e poi decide se mostrare il campo nick o solo la lista.
+   * Fase 1 dell'esito finale: solo la scritta grande, su sfondo scuro
+   * pieno schermo (non lastpage.jpg — quella arriva nella fase 2), per
+   * CFG.finalTitleMs. Nessun input possibile qui: e' un momento puramente
+   * di pausa scenica, non ancora la schermata interattiva.
    *
-   * Layout in fasce fisse (in pixel dal top del pannello, che qui e' 0 in
-   * alto sullo schermo intero): titolo/punteggio nei primi 130px, lista
-   * classifica subito sotto, form/pulsante negli ultimi ~150px. Le due fasce
-   * non si toccano mai per costruzione, a differenza della prima versione
-   * che posizionava il form HTML con una percentuale di viewport scollegata
-   * dalle coordinate di gioco usate dal testo Phaser.
+   * setTimeout, non this.time.delayedCall(): i timer di Phaser avanzano solo
+   * dentro update(), e a fisica in pausa (endLevel() la ferma subito prima
+   * di chiamare showEndMessage()) il ciclo di update rallenta al punto da
+   * rendere il delay inaffidabile — la schermata restava bloccata sulla
+   * scritta ben oltre i secondi previsti. Stesso identico problema gia'
+   * risolto in GameScene.endLevel() per il "premi un tasto": vedi il
+   * commento li' per il ragionamento completo.
    */
-  async showFinalScreen(score, levelName, top, onContinue) {
-    const listY = top + 190;
+  showTitleOnly(title, color, score, levelName, onContinue) {
+    this.add.rectangle(CFG.width / 2, CFG.height / 2, CFG.width, CFG.height, 0x000000, 0.92).setDepth(50);
+
+    this.add
+      .text(CFG.width / 2, CFG.height / 2, title, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '96px',
+        color,
+        stroke: '#000000',
+        strokeThickness: 12,
+      })
+      .setOrigin(0.5)
+      .setDepth(51);
+
+    setTimeout(() => {
+      // Guardia minima: se per qualche motivo la scena non fosse piu' attiva
+      // quando il timeout scatta, non ha senso disegnarci sopra.
+      if (this.scene.isActive()) this.showFinalScreen(score, levelName, onContinue);
+    }, CFG.finalTitleMs);
+  }
+
+  /**
+   * Fase 2 dell'esito finale: lastpage.jpg a piena schermo, punteggio,
+   * classifica (recuperata in modo asincrono) e form nick/pulsante sopra.
+   *
+   * Ripulisce prima tutto quello che la fase 1 aveva disegnato
+   * (removeAll(true) su questa scena): titolo e sfondo scuro non servono
+   * piu', e lasciarli sotto lastpage.jpg sprecherebbe solo depth inutili.
+   */
+  async showFinalScreen(score, levelName, onContinue) {
+    this.children.removeAll(true);
+
+    this.add.image(CFG.width / 2, CFG.height / 2, 'lastpage').setDepth(50);
+
+    // Fascia semitrasparente dietro punteggio/classifica: lastpage.jpg e'
+    // un motivo decorativo colorato, il testo bianco da solo rischierebbe
+    // di perdersi contro alcune zone piu' chiare dell'immagine.
+    this.add.rectangle(CFG.width / 2, 230, CFG.width, 300, 0x000000, 0.55).setDepth(51);
+
+    this.add
+      .text(CFG.width / 2, 110, `Punteggio: ${score}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '44px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(52);
+
+    const listY = 190;
 
     const loadingText = this.add
       .text(CFG.width / 2, listY, 'Caricamento classifica…', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '26px',
-        color: '#8b949e',
+        color: '#c9d1d9',
       })
       .setOrigin(0.5, 0)
-      .setDepth(51);
+      .setDepth(52);
 
     const scores = await ScoreApi.getTopScores();
     loadingText.destroy();
@@ -175,7 +225,7 @@ class HudScene extends Phaser.Scene {
           color: '#8b949e',
         })
         .setOrigin(0.5)
-        .setDepth(51);
+        .setDepth(52);
       return;
     }
 
@@ -192,7 +242,7 @@ class HudScene extends Phaser.Scene {
         lineSpacing: 6,
       })
       .setOrigin(0.5, 0)
-      .setDepth(51);
+      .setDepth(52);
   }
 
   /**
@@ -329,7 +379,7 @@ class HudScene extends Phaser.Scene {
         padding: { x: 24, y: 10 },
       })
       .setOrigin(0.5)
-      .setDepth(51)
+      .setDepth(52)
       .setInteractive({ useHandCursor: true });
 
     hint.on('pointerup', () => {

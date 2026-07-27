@@ -161,6 +161,11 @@ const CFG = {
   // dal tasto ancora premuto al momento della sconfitta.
   restartDelayMs: 700,
 
+  // Sull'esito finale (game over o fine del gioco), quanto resta a schermo
+  // la sola scritta (GAME OVER / HAI FINITO IL GIOCO) prima di passare alla
+  // schermata con lastpage.jpg, punteggio e classifica.
+  finalTitleMs: 3500,
+
   /**
    * Controlli touch (joystick fisso + due pulsanti fissi), attivi solo su
    * device con supporto touch: vedi Touch.isTouchDevice() in touch.js.
