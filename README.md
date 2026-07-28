@@ -36,15 +36,11 @@ I tre livelli usano i tre scenari: colline → città → foresta notturna.
 
 ## Avvio
 
-Serve un server HTTP (con `file://` il browser blocca il caricamento delle immagini):
+Serve un server HTTP (con `file://` il browser blocca il caricamento delle
+immagini). In locale il progetto è già servito da Apache: basta l'URL del
+vhost (es. `http://localhost/game1/`), senza avviare nulla a parte.
 
-```bash
-cd /var/www/html/game1
-python3 -m http.server 8000
-# poi: http://localhost:8000
-```
-
-Oppure, essendo già sotto la document root Apache, l'URL del vhost.
+In produzione: `magicwand.mz-lab.eu` (ISPConfig, utente `web8`).
 
 ## Struttura
 
@@ -66,7 +62,7 @@ src/
     HudScene.js     interfaccia sovrapposta, incluso game over + classifica
 api/
   score.php         endpoint REST (GET classifica, POST nuovo punteggio)
-  score.sqlite       database, generato al primo avvio — non versionato
+  score.sqlite      database, generato al primo avvio — non versionato
   .htaccess         nega l'accesso diretto al file .sqlite via URL
 assets/
   bg/{forest,city,night}/layer_NN.png    sfondi pronti all'uso
@@ -244,7 +240,7 @@ Sei SFX in `assets/audio/`, tutti CC0 (fonti e licenze in
 
 | File | Evento | Punto in GameScene.js |
 |---|---|---|
-| `coin` | Raccolta gemma o moneta drop | `onCollectBonus`, `onTouchDrop` (ramo `isCoin`) |
+| `coin` | Raccolta gemma o moneta drop | `onCollectBonus`, `onTouchDrop` (ramo `dropType === 'coin'`) |
 | `explosion` | Bancomat distrutto con l'incantesimo | `onBulletHitsExplosive` |
 | `shot` | Lancio dell'incantesimo | `handleFire` |
 | `hurt` | Perdita di una vita | `damagePlayer` — un solo punto, richiamato da tutte e tre le fonti di danno (bancomat, cacca, uovo) |
